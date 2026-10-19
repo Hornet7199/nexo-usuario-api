@@ -1,0 +1,18 @@
+# Perfil dos testes automatizados: H2 em memória, sem Postgres nem pedagogico-api.
+spring:
+  datasource:
+    url: jdbc:h2:mem:usuario_teste;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+nexo:
+  jwt:
+    secret: segredo-somente-para-teste-com-mais-de-32-bytes
+  pedagogico:
+    enabled: false
+  seed:
+    enabled: false
