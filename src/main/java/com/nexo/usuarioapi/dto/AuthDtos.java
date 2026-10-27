@@ -16,9 +16,12 @@ public final class AuthDtos {
     public record LoginRequest(@NotBlank @Size(max = 254) String login,
                                @NotBlank @Size(max = 128) String senha) {}
 
-    public record UsuarioDTO(Long id, String nome, String cargo, String foto, String role) {
+    /** {@code precisaTrocarSenha}: o cliente desvia para a troca de senha antes de qualquer tela. */
+    public record UsuarioDTO(Long id, String nome, String cargo, String foto, String role,
+                             boolean precisaTrocarSenha) {
         public static UsuarioDTO of(Usuario u) {
-            return new UsuarioDTO(u.getId(), u.getNome(), u.getCargo(), u.getFoto(), u.getRole().name());
+            return new UsuarioDTO(u.getId(), u.getNome(), u.getCargo(), u.getFoto(), u.getRole().name(),
+                    u.isPrecisaTrocarSenha());
         }
     }
 

@@ -3,6 +3,7 @@ package com.nexo.usuarioapi.service;
 import com.nexo.usuarioapi.domain.Role;
 import com.nexo.usuarioapi.domain.Usuario;
 import com.nexo.usuarioapi.dto.ContaDtos.ContaDto;
+import com.nexo.usuarioapi.dto.ContaDtos.ResumoContasDto;
 import com.nexo.usuarioapi.dto.ContaDtos.SenhaRedefinidaDto;
 import com.nexo.usuarioapi.dto.PageEnvelope;
 import com.nexo.usuarioapi.exception.ApiException;
@@ -37,6 +38,22 @@ public class ContaService {
         String filtro = (busca == null || busca.isBlank()) ? null : "%" + busca.trim().toLowerCase() + "%";
         var pagina = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), TAMANHO_MAXIMO_PAGINA));
         return PageEnvelope.of(usuarios.buscar(papel, filtro, pagina), ContaDto::of);
+    }
+
+    @Transactional(readOnly = true)
+    public ResumoContasDto resumo() {
+        var porPapel = new java.util.EnumMap<Role, Long>(Role.class);
+        long contas = 0;
+        long inativas = 0;
+        for (Object[] linha : usuarios.contarPorPapelEAtivo()) {
+            long total = ((Number) linha[2]).longValue();
+            contas += total;
+            if (!Boolean.TRUE.equals(linha[1])) inativas += total;
+            porPapel.merge((Role) linha[0], total, Long::sum);
+        }
+        return new ResumoContasDto(contas, inativas,
+                porPapel.getOrDefault(Role.ALUNO, 0L), porPapel.getOrDefault(Role.PROFESSOR, 0L),
+                porPapel.getOrDefault(Role.DIRETOR, 0L), porPapel.getOrDefault(Role.ADMIN, 0L));
     }
 
     /**

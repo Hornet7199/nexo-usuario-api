@@ -47,6 +47,7 @@ public class CredenciaisService {
         Usuario usuario = new Usuario();
         usuario.setLogin(acesso.login());
         usuario.setSenhaHash(passwordEncoder.encode(acesso.senhaProvisoria()));
+        usuario.setPrecisaTrocarSenha(true);
         usuario.setNome(nome);
         usuario.setCargo(cargo);
         usuario.setRole(role);
@@ -61,6 +62,7 @@ public class CredenciaisService {
     public String redefinirSenhaProvisoria(Usuario usuario) {
         String senha = gerarSenhaProvisoria();
         usuario.setSenhaHash(passwordEncoder.encode(senha));
+        usuario.setPrecisaTrocarSenha(true);
         return senha;
     }
 

@@ -42,6 +42,8 @@ class CadastroTest extends TesteApiBase {
         MvcResult acesso = login("joana.lima@nexo.escola.com", senha);
         status().isOk().match(acesso);
         jsonPath("$.usuario.role").value("ALUNO").match(acesso);
+        // Senha sorteada pelo sistema: o cliente deve prender a sessão na troca de senha.
+        jsonPath("$.usuario.precisaTrocarSenha").value(true).match(acesso);
     }
 
     @Test

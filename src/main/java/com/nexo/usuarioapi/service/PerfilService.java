@@ -14,6 +14,7 @@ import com.nexo.usuarioapi.repository.ProfessorRepository;
 import com.nexo.usuarioapi.repository.UsuarioRepository;
 import com.nexo.usuarioapi.security.PoliticaSenha;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,10 +38,14 @@ public class PerfilService {
     private final PoliticaSenha politicaSenha;
     private final AuthService authService;
     private final AuditoriaService auditoria;
+    private final PedagogicoClient pedagogico;
+    private final ApplicationEventPublisher eventos;
 
     public PerfilService(UsuarioRepository usuarios, FotoPerfilRepository fotos, AlunoRepository alunos,
                          ProfessorRepository professores, PasswordEncoder passwordEncoder,
-                         PoliticaSenha politicaSenha, AuthService authService, AuditoriaService auditoria) {
+                         PoliticaSenha politicaSenha, AuthService authService, AuditoriaService auditoria,
+                         PedagogicoClient pedagogico,
+                         ApplicationEventPublisher eventos) {
         this.usuarios = usuarios;
         this.fotos = fotos;
         this.alunos = alunos;
@@ -49,6 +54,8 @@ public class PerfilService {
         this.politicaSenha = politicaSenha;
         this.authService = authService;
         this.auditoria = auditoria;
+        this.pedagogico = pedagogico;
+        this.eventos = eventos;
     }
 
     /**
@@ -84,6 +91,8 @@ public class PerfilService {
             usuario.setNome(request.nome().trim());
         }
         usuarios.save(usuario);
+        pedagogico.sincronizarPerfil(usuario.getId(), usuario.getNome(), usuario.getFoto());
+        eventos.publishEvent(new ContaAlterada(usuario.getId()));
         auditoria.registrar(usuario.getNome(), AuditoriaService.Tipo.ALTERACAO, "Perfil atualizado", null, null);
         return UsuarioDTO.of(usuario);
     }
@@ -150,6 +159,8 @@ public class PerfilService {
         politicaSenha.validar(request.novaSenha(), usuario.getLogin(), usuario.getNome());
 
         usuario.setSenhaHash(passwordEncoder.encode(request.novaSenha()));
+        // A senha agora é só do usuário: a provisória, que outra pessoa viu, deixou de valer.
+        usuario.setPrecisaTrocarSenha(false);
         usuarios.save(usuario);
 
         int encerradas = authService.encerrarOutrasSessoes(usuario.getId(), refreshTokenAtual);
@@ -169,6 +180,8 @@ public class PerfilService {
 
     /** Aluno.foto e Professor.foto são cópias denormalizadas — sem sincronizar ficam presas na antiga. */
     private void sincronizarFoto(Usuario usuario) {
+        pedagogico.sincronizarPerfil(usuario.getId(), usuario.getNome(), usuario.getFoto());
+        eventos.publishEvent(new ContaAlterada(usuario.getId()));
         alunos.findByUsuarioId(usuario.getId()).ifPresent(a -> {
             a.setFoto(usuario.getFoto());
             alunos.save(a);

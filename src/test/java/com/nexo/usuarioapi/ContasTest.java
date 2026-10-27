@@ -38,6 +38,24 @@ class ContasTest extends TesteApiBase {
     }
 
     @Test
+    void resumoContaAsContasPorPapelEAsDesativadas() throws Exception {
+        String admin = bearer(criarConta(Role.ADMIN));
+        Usuario inativo = criarConta(Role.ALUNO);
+        inativo.setAtivo(false);
+        usuarios.save(inativo);
+
+        mvc.perform(get("/api/admin/contas/resumo").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contas").value(org.hamcrest.Matchers.greaterThanOrEqualTo(2)))
+                .andExpect(jsonPath("$.contasInativas").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.admins").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.alunos").exists())
+                .andExpect(jsonPath("$.diretores").exists());
+        mvc.perform(get("/api/admin/contas/resumo").header(HttpHeaders.AUTHORIZATION, bearer(criarConta(Role.ALUNO))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void papelInvalidoNoFiltroDevolve400() throws Exception {
         mvc.perform(get("/api/admin/contas").param("papel", "SECRETARIA")
                         .header(HttpHeaders.AUTHORIZATION, bearer(criarConta(Role.ADMIN))))
@@ -112,7 +130,9 @@ class ContasTest extends TesteApiBase {
         String provisoria = JsonPath.read(r.getResponse().getContentAsString(), "$.senhaProvisoria");
 
         status().isUnauthorized().match(login(alvo.getLogin(), SENHA));
-        status().isOk().match(login(alvo.getLogin(), provisoria));
+        MvcResult comProvisoria = login(alvo.getLogin(), provisoria);
+        status().isOk().match(comProvisoria);
+        jsonPath("$.usuario.precisaTrocarSenha").value(true).match(comProvisoria);
         mvc.perform(post("/api/auth/refresh").cookie(refresh)).andExpect(status().isUnauthorized());
     }
 }

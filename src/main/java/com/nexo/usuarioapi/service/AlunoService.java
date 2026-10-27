@@ -9,6 +9,7 @@ import com.nexo.usuarioapi.dto.AlunoResumoDto;
 import com.nexo.usuarioapi.exception.ApiException;
 import com.nexo.usuarioapi.repository.AlunoRepository;
 import com.nexo.usuarioapi.security.UsuarioAutenticado;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,13 +27,16 @@ public class AlunoService {
     private final CredenciaisService credenciais;
     private final AuditoriaService auditoria;
     private final PedagogicoClient pedagogico;
+    private final ApplicationEventPublisher eventos;
 
     public AlunoService(AlunoRepository alunos, CredenciaisService credenciais,
-                        AuditoriaService auditoria, PedagogicoClient pedagogico) {
+                        AuditoriaService auditoria, PedagogicoClient pedagogico,
+                        ApplicationEventPublisher eventos) {
         this.alunos = alunos;
         this.credenciais = credenciais;
         this.auditoria = auditoria;
         this.pedagogico = pedagogico;
+        this.eventos = eventos;
     }
 
     @Transactional
@@ -51,6 +55,13 @@ public class AlunoService {
         aluno.setUsuario(credenciais.criarUsuario(aluno.getNome(),
                 nomeTurma != null ? nomeTurma : "Aluno", Role.ALUNO, acesso));
         alunos.save(aluno);
+
+        // O pedagógico guarda uma cópia enxuta do aluno (id, nome, turma): é ela que liga
+        // nota e frequência a ele. Se o aviso falhar o cadastro inteiro é desfeito.
+        pedagogico.sincronizarAluno(aluno.getId(), aluno.getUsuario().getId(), aluno.getNome(),
+                aluno.getTurmaId(), aluno.getFoto());
+        // O chat também precisa conhecer quem acabou de ganhar acesso (depois do commit).
+        eventos.publishEvent(new ContaAlterada(aluno.getUsuario().getId()));
 
         auditoria.registrar(operador, AuditoriaService.Tipo.ALTERACAO,
                 "Aluno cadastrado", "Aluno: " + aluno.getNome(), null);

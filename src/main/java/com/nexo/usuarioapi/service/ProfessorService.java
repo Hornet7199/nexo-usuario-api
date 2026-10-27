@@ -7,6 +7,7 @@ import com.nexo.usuarioapi.dto.ProfessorCriadoDto;
 import com.nexo.usuarioapi.dto.ProfessorDto;
 import com.nexo.usuarioapi.exception.ApiException;
 import com.nexo.usuarioapi.repository.ProfessorRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,13 +39,16 @@ public class ProfessorService {
     private final CredenciaisService credenciais;
     private final AuditoriaService auditoria;
     private final PedagogicoClient pedagogico;
+    private final ApplicationEventPublisher eventos;
 
     public ProfessorService(ProfessorRepository professores, CredenciaisService credenciais,
-                            AuditoriaService auditoria, PedagogicoClient pedagogico) {
+                            AuditoriaService auditoria, PedagogicoClient pedagogico,
+                        ApplicationEventPublisher eventos) {
         this.professores = professores;
         this.credenciais = credenciais;
         this.auditoria = auditoria;
         this.pedagogico = pedagogico;
+        this.eventos = eventos;
     }
 
     @Transactional
@@ -81,6 +85,11 @@ public class ProfessorService {
         professor.setEmail(acesso.login());
         professor.setUsuario(credenciais.criarUsuario(professor.getNome(), cargo(professor), Role.PROFESSOR, acesso));
         professores.save(professor);
+
+        // Cópia enxuta no pedagógico, com as matérias — ver AlunoService.
+        pedagogico.sincronizarProfessor(professor.getId(), professor.getUsuario().getId(), professor.getNome(),
+                professor.getFoto(), professor.getMateriaIds());
+        eventos.publishEvent(new ContaAlterada(professor.getUsuario().getId()));
 
         auditoria.registrar(operador, AuditoriaService.Tipo.ALTERACAO,
                 "Professor cadastrado", "Professor: " + professor.getNome(), null);

@@ -6,21 +6,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Único ponto em que este serviço fala com o pedagogico-api (hoje, o monólito): turmas e
- * matérias são dele, aqui só existem como id.
+ * Único ponto em que este serviço fala com o pedagogico-api: turmas e matérias são dele,
+ * aqui só existem como id. Também é por aqui que o pedagógico fica sabendo de quem é
+ * cadastrado ou muda de nome, turma ou foto (as chamadas {@code sincronizar*}).
  *
  * <p>A chamada repassa o {@code Authorization} da requisição em curso. Os dois serviços
  * compartilham o segredo do JWT, então o token emitido aqui vale lá — e o recorte por
@@ -40,13 +37,10 @@ public class PedagogicoClient {
     private final RestClient http;
 
     public PedagogicoClient(@Value("${nexo.pedagogico.enabled:true}") boolean habilitado,
-                            @Value("${nexo.pedagogico.url:http://localhost:8080}") String url,
+                            @Value("${nexo.pedagogico.url:http://localhost:8082}") String url,
                             @Value("${nexo.pedagogico.timeout-ms:3000}") int timeoutMs) {
         this.habilitado = habilitado;
-        var fabrica = new SimpleClientHttpRequestFactory();
-        fabrica.setConnectTimeout(Duration.ofMillis(timeoutMs));
-        fabrica.setReadTimeout(Duration.ofMillis(timeoutMs));
-        this.http = RestClient.builder().baseUrl(url).requestFactory(fabrica).build();
+        this.http = ClienteHttp.criar(url, timeoutMs);
     }
 
     public boolean habilitado() {
@@ -67,7 +61,7 @@ public class PedagogicoClient {
         if (!habilitado) return Map.of();
         try {
             List<Item> itens = http.get().uri(caminho)
-                    .header(HttpHeaders.AUTHORIZATION, tokenDaRequisicao())
+                    .header(HttpHeaders.AUTHORIZATION, ClienteHttp.tokenDaRequisicao())
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<Item>>() {});
             Map<Long, String> porId = new LinkedHashMap<>();
@@ -80,11 +74,60 @@ public class PedagogicoClient {
         }
     }
 
-    private static String tokenDaRequisicao() {
-        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
-            String header = attrs.getRequest().getHeader(HttpHeaders.AUTHORIZATION);
-            if (header != null && !header.isBlank()) return header;
+    // ── Sincronização: o pedagogico-api guarda uma cópia enxuta de aluno e professor ──
+
+    /**
+     * Avisa o pedagógico de um aluno novo ou alterado. Estrita: se falhar, lança 503 e o
+     * cadastro inteiro é desfeito — aluno que existe só aqui não teria nota nem frequência.
+     */
+    public void sincronizarAluno(Long id, Long usuarioId, String nome, Long turmaId, String foto) {
+        Map<String, Object> corpo = new LinkedHashMap<>();
+        corpo.put("usuarioId", usuarioId);
+        corpo.put("nome", nome);
+        corpo.put("turmaId", turmaId);
+        corpo.put("foto", foto);
+        enviar("PUT", "/api/sync/alunos/" + id, corpo, true);
+    }
+
+    /** Idem para professor, com as matérias que leciona. */
+    public void sincronizarProfessor(Long id, Long usuarioId, String nome, String foto, java.util.Collection<Long> materiaIds) {
+        Map<String, Object> corpo = new LinkedHashMap<>();
+        corpo.put("usuarioId", usuarioId);
+        corpo.put("nome", nome);
+        corpo.put("foto", foto);
+        corpo.put("materiaIds", materiaIds == null ? List.of() : List.copyOf(materiaIds));
+        enviar("PUT", "/api/sync/professores/" + id, corpo, true);
+    }
+
+    /**
+     * Nome ou foto de uma conta que mudou. Melhor esforço: o usuário já fez o que queria
+     * e a cópia atrasada se corrige na próxima mudança — não vale derrubar a ação dele.
+     */
+    public void sincronizarPerfil(Long usuarioId, String nome, String foto) {
+        Map<String, Object> corpo = new LinkedHashMap<>();
+        corpo.put("nome", nome);
+        corpo.put("foto", foto);
+        enviar("PATCH", "/api/sync/usuarios/" + usuarioId + "/perfil", corpo, false);
+    }
+
+    private void enviar(String metodo, String caminho, Map<String, Object> corpo, boolean estrito) {
+        if (!habilitado) return;
+        try {
+            var requisicao = "PATCH".equals(metodo) ? http.patch() : http.put();
+            requisicao.uri(caminho)
+                    .header(HttpHeaders.AUTHORIZATION, ClienteHttp.tokenDaRequisicao())
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(corpo)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException | ApiException e) {
+            if (estrito) {
+                log.warn("falha ao sincronizar com o pedagogico-api em {}: {}", caminho, e.getMessage());
+                if (e instanceof ApiException api) throw api;
+                throw ApiException.servicoIndisponivel(
+                        "Não foi possível comunicar o cadastro ao serviço pedagógico. Tente novamente em instantes.");
+            }
+            log.warn("sincronização de perfil não entregue ao pedagogico-api ({}): {}", caminho, e.getMessage());
         }
-        throw ApiException.unauthorized("Sessão ausente para consultar o catálogo pedagógico.");
     }
 }

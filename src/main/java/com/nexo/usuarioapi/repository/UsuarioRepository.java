@@ -24,4 +24,11 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
            order by u.nome
            """)
     Page<Usuario> buscar(@Param("role") Role role, @Param("busca") String busca, Pageable pageable);
+
+    /**
+     * (papel, ativo, total) para a escola inteira numa consulta só: o painel precisa de seis
+     * números sobre a tabela de usuários, e um group by responde o que seis count(*) fariam.
+     */
+    @Query("select u.role, u.ativo, count(u) from Usuario u group by u.role, u.ativo")
+    java.util.List<Object[]> contarPorPapelEAtivo();
 }

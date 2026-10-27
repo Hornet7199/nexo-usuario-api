@@ -43,7 +43,10 @@ class PerfilTest extends TesteApiBase {
     @Test
     void trocaDeSenhaGravaApenasOHashEEncerraOutrasSessoesPoupandoAAtual() throws Exception {
         Usuario u = criarConta(Role.ALUNO);
+        u.setPrecisaTrocarSenha(true); // como se a senha atual fosse a provisória
+        usuarios.save(u);
         MvcResult sessaoAtual = login(u.getLogin(), SENHA);
+        jsonPath("$.usuario.precisaTrocarSenha").value(true).match(sessaoAtual);
         String token = "Bearer " + JsonPath.read(sessaoAtual.getResponse().getContentAsString(), "$.token");
         Cookie atual = cookieDeRefresh(sessaoAtual);
         Cookie outra = cookieDeRefresh(login(u.getLogin(), SENHA));
@@ -51,7 +54,10 @@ class PerfilTest extends TesteApiBase {
         status().isNoContent().match(trocarSenha(token, atual, SENHA, "Nova#Senha2026"));
 
         status().isUnauthorized().match(login(u.getLogin(), SENHA));
-        status().isOk().match(login(u.getLogin(), "Nova#Senha2026"));
+        MvcResult comNova = login(u.getLogin(), "Nova#Senha2026");
+        status().isOk().match(comNova);
+        // A troca feita pelo próprio usuário desliga o flag.
+        jsonPath("$.usuario.precisaTrocarSenha").value(false).match(comNova);
         mvc.perform(post("/api/auth/refresh").cookie(outra)).andExpect(status().isUnauthorized());
     }
 

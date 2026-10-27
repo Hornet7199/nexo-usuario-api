@@ -1,4 +1,4 @@
-# Perfil dos testes automatizados: H2 em memória, sem Postgres nem pedagogico-api.
+# Perfil dos testes automatizados: H2 em memória, sem Postgres nem outros serviços.
 spring:
   datasource:
     url: jdbc:h2:mem:usuario_teste;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
@@ -13,6 +13,10 @@ nexo:
   jwt:
     secret: segredo-somente-para-teste-com-mais-de-32-bytes
   pedagogico:
+    enabled: false
+  comunicacao:
+    enabled: false
+  gamificacao:
     enabled: false
   seed:
     enabled: false

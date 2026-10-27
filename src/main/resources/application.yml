@@ -2,6 +2,12 @@ spring:
   application:
     name: usuario-api
 
+  # Sem login por usuário/senha do Spring: a autenticação é só por JWT (JwtAuthFilter). Sem isto
+  # o Spring Security cria um usuário "user" com senha aleatória e a escreve no log do arranque.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
   # Carrega o .env local para a senha do JWT não precisar estar
   # exportado no shell. Opcional: em produção as variáveis vêm do ambiente.
   config:
@@ -84,7 +90,19 @@ nexo:
     # Catálogo de turmas e matérias (hoje no monólito). Desligado, os cadastros aceitam
     # qualquer id e nenhuma chamada é feita.
     enabled: ${PEDAGOGICO_ENABLED:true}
-    url: ${PEDAGOGICO_URL:http://localhost:8080}
+    url: ${PEDAGOGICO_URL:http://localhost:8082}
+    timeout-ms: 3000
+  comunicacao:
+    # Chat, avisos, dúvidas e mensagens. Este serviço avisa quando alguém é cadastrado ou muda de
+    # nome, foto ou privacidade. Desligado, nenhuma chamada é feita.
+    enabled: ${COMUNICACAO_ENABLED:true}
+    url: ${COMUNICACAO_URL:http://localhost:8083}
+    timeout-ms: 3000
+  gamificacao:
+    # XP, ranking e desafios. Este serviço avisa quando um aluno é cadastrado ou muda de nome,
+    # foto ou privacidade (exibir no ranking, perfil público). Desligado, nenhuma chamada é feita.
+    enabled: ${GAMIFICACAO_ENABLED:true}
+    url: ${GAMIFICACAO_URL:http://localhost:8084}
     timeout-ms: 3000
   seed:
     # Contas de exemplo (diretor/admin/professor/aluno, senha 123456). Só em dev.

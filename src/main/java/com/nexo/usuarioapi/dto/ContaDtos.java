@@ -20,6 +20,10 @@ public final class ContaDtos {
 
     public record AtualizarAtivoRequest(@NotNull(message = "Informe se a conta fica ativa.") Boolean ativo) {}
 
+    /** Quantas contas há, por papel, e quantas estão desativadas — o lado de contas do painel admin. */
+    public record ResumoContasDto(long contas, long contasInativas, long alunos, long professores,
+                                  long diretores, long admins) {}
+
     /** A senha em claro existe só nesta resposta. */
     public record SenhaRedefinidaDto(String login, String senhaProvisoria) {}
 }
